@@ -122,21 +122,21 @@ class Generator {
             val request = Request.Builder().url(url)
             getOkHttpClient().newCall(request.build()).execute().let { response ->
                 // Bypass Cloudflare ("Please wait 5 seconds" page)
-                if (response.code() == 503 && response.header("Server") in serverCheck) {
+                if (response.code == 503 && response.header("Server") in serverCheck) {
                     var cookie = "${response.header("Set-Cookie")!!.substringBefore(";")}; "
-                    Jsoup.parse(response.body()!!.string()).let { document ->
+                    Jsoup.parse(response.body!!.string()).let { document ->
                         val path = document.select("[id=\"challenge-form\"]").attr("action")
                         val chk = document.select("[name=\"s\"]").attr("value")
                         getOkHttpClient().newCall(Request.Builder().url("$url/$path?s=$chk").build()).execute().let { solved ->
                             cookie += solved.header("Set-Cookie")!!.substringBefore(";")
                             request.addHeader("Cookie", cookie).build().let {
-                                return Jsoup.parse(getOkHttpClient().newCall(it).execute().body()?.string())
+                                return Jsoup.parse(getOkHttpClient().newCall(it).execute().body?.string())
                             }
                         }
                     }
                 }
-                if (response.code() == 200) {
-                    return Jsoup.parse(response.body()?.string())
+                if (response.code == 200) {
+                    return Jsoup.parse(response.body?.string())
                 }
             }
         } catch (e: Exception) {
@@ -240,7 +240,7 @@ class Generator {
             SourceData("en", "Manhwas Men", "https://manhwas.men"),
             SourceData("fr", "Scan FR", "https://www.scan-fr.cc"),
             SourceData("fr", "Scan VF", "https://www.scan-vf.net"),
-            SourceData("fr", "Scan OP", "https://scan-op.net"),
+            SourceData("fr", "Scan OP", "https://scan-op.cc"),
             SourceData("id", "Komikid", "https://www.komikid.com"),
             SourceData("pt-BR", "Mangás Yuri", "https://mangasyuri.net"),
             SourceData("pl", "Nikushima", "http://azbivo.webd.pro"),
@@ -254,15 +254,15 @@ class Generator {
             SourceData("pl", "Phoenix-Scans", "https://phoenix-scans.pl"),
             SourceData("tr", "Puzzmos", "https://puzzmos.com"),
             SourceData("fr", "Scan-1", "https://wwv.scan-1.com"),
-            SourceData("fr", "Lelscan-VF", "https://www.lelscan-vf.com"),
+            SourceData("fr", "Lelscan-VF", "https://lelscan-vf.co"),
             SourceData("id", "Komik Manga", "https://adm.komikmanga.com"),
             SourceData("ko", "Mangazuki Raws", "https://raws.mangazuki.co"),
+            SourceData("en", "Mangazuki", "https://mangazuki.co/"),
             SourceData("pt-BR", "Remangas", "https://remangas.top"),
             SourceData("pt-BR", "AnimaRegia", "https://animaregia.net"),
-            SourceData("tr", "NoxSubs", "https://noxsubs.com"),
             SourceData("tr", "MangaVadisi", "http://manga-v2.mangavadisi.org"),
             SourceData("id", "MangaID", "https://mangaid.click"),
-            SourceData("fr", "Jpmangas", "https://www.jpmangas.com"),
+            SourceData("fr", "Jpmangas", "https://jpmangas.co"),
             SourceData("fr", "Op-VF", "https://www.op-vf.com"),
             SourceData("fr", "FR Scan", "https://www.frscan.me"),
             // NOTE: THIS SOURCE CONTAINS A CUSTOM LANGUAGE SYSTEM (which will be ignored)!

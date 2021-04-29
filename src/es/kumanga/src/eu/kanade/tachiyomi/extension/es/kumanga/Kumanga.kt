@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.kumanga
 
+import android.util.Base64
 import com.github.salomonbrys.kotson.array
 import com.github.salomonbrys.kotson.get
 import com.github.salomonbrys.kotson.int
@@ -17,12 +18,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -34,9 +34,9 @@ class Kumanga : HttpSource() {
         .followRedirects(true)
         .addInterceptor { chain ->
             val originalRequest = chain.request()
-            if (originalRequest.url().toString().endsWith("token=")) {
+            if (originalRequest.url.toString().endsWith("token=")) {
                 getKumangaToken()
-                val url = originalRequest.url().toString() + kumangaToken
+                val url = originalRequest.url.toString() + kumangaToken
                 val newRequest = originalRequest.newBuilder().url(url).build()
                 chain.proceed(newRequest)
             } else {
@@ -61,14 +61,21 @@ class Kumanga : HttpSource() {
         .build()
 
     private var kumangaToken = ""
-    private val tokenRegex = Regex(""""([^"\s]{100,})"""")
 
-    private fun getKumangaToken() {
-        kumangaToken = client.newCall(GET("$baseUrl/mangalist?&page=1", headers)).execute().asJsoup()
-            .select("div.input-group [type=hidden]")
-            .firstOrNull()
-            ?.let { tokenRegex.find(it.outerHtml())?.groupValues?.get(1) }
-            ?: throw IOException("No fue posible obtener la lista de mangas")
+    private fun encodeAndReverse(dtValue: String): String {
+        return Base64.encodeToString(dtValue.toByteArray(), Base64.DEFAULT).reversed().trim()
+    }
+
+    private fun decodeBase64(encodedString: String): String {
+        return Base64.decode(encodedString, Base64.DEFAULT).toString(charset("UTF-8"))
+    }
+
+    private fun getKumangaToken(): String {
+        val body = client.newCall(GET("$baseUrl/mangalist?&page=1", headers)).execute().asJsoup()
+        var dt = body.select("#searchinput").attr("dt").toString()
+        var kumangaTokenKey = encodeAndReverse(encodeAndReverse(dt)).replace("=", "k").toLowerCase()
+        kumangaToken = body.select("div.input-group [type=hidden]").attr(kumangaTokenKey)
+        return kumangaToken
     }
 
     private fun getMangaCover(mangaId: String) = "https://static.kumanga.com/manga_covers/$mangaId.jpg?w=201"
@@ -98,7 +105,7 @@ class Kumanga : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val res = response.body()!!.string()
+        val res = response.body!!.string()
         val json = parseJson(res)
         val data = json["contents"].array
         val retrievedCount = json["retrievedCount"].int
@@ -169,10 +176,11 @@ class Kumanga : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
         val document = response.asJsoup()
-        val imagesJsonListStr = document.select("script:containsData(var pUrl=)").firstOrNull()?.data()
+        var imagesJsonListStr = document.select("script:containsData(var pUrl=)").firstOrNull()?.data()
             ?.substringAfter("var pUrl=")
             ?.substringBefore(";")
             ?: throw Exception("imagesJsonListStr null")
+        imagesJsonListStr = decodeBase64(decodeBase64(imagesJsonListStr).reversed().dropLast(10).drop(10))
         val imagesJsonList = parseJson(imagesJsonListStr).array
 
         imagesJsonList.forEach {
@@ -188,7 +196,7 @@ class Kumanga : HttpSource() {
     override fun imageUrlParse(response: Response) = throw Exception("Not Used")
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = HttpUrl.parse("$baseUrl/backend/ajax/searchengine.php?page=$page&perPage=10&keywords=$query&retrieveCategories=true&retrieveAuthors=false&contentType=manga&token=$kumangaToken")!!.newBuilder()
+        val url = "$baseUrl/backend/ajax/searchengine.php?page=$page&perPage=10&keywords=$query&retrieveCategories=true&retrieveAuthors=false&contentType=manga&token=$kumangaToken".toHttpUrlOrNull()!!.newBuilder()
 
         filters.forEach { filter ->
             when (filter) {

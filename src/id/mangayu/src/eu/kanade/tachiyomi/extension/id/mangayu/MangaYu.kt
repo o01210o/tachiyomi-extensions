@@ -7,11 +7,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -22,7 +21,7 @@ class MangaYu : ParsedHttpSource() {
     override val baseUrl = "https://mangayu.com"
     override val lang = "id"
     override val supportsLatest = true
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.US)
 
     protected fun Element.imgAttr(): String = if (this.hasAttr("data-src")) this.attr("abs:data-src") else this.attr("abs:src")
 
@@ -35,8 +34,8 @@ class MangaYu : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = HttpUrl.parse("$baseUrl/search")!!.newBuilder()
-            .addQueryParameter("query", query)
+        val url = "$baseUrl/manga?".toHttpUrlOrNull()!!.newBuilder()
+            .addQueryParameter("search", query)
             .addQueryParameter("page", page.toString())
         val newUrl = null
         filters.forEach { filter ->
@@ -50,16 +49,15 @@ class MangaYu : ParsedHttpSource() {
         return GET(url.toString(), headers)
     }
 
-    override fun popularMangaSelector() = ".box-grid .card > div.card-body"
+    override fun popularMangaSelector() = ".row .col-md-8 .row .col-md-6"
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = element.select("div.img-box a img").attr("src")
-        manga.title = element.select("a.link-manga").text()
-        val item = element.select(".img-box a")
-        manga.setUrlWithoutDomain(item.attr("href"))
+        manga.setUrlWithoutDomain(element.select(".detail a.link").attr("href"))
+        manga.title = element.select(".detail a.link").text()
+        manga.thumbnail_url = element.select(".cover a img").attr("src")
 
         return manga
     }
@@ -86,14 +84,12 @@ class MangaYu : ParsedHttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListSelector() = "div.chapter-list a"
+    override fun chapterListSelector() = "div.list-group-item a"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        // timeStamp to remove child timestamp inside chapter name
-        val timeStamp = element.select("a.list-chapter i").text()
-        name = element.select("a.list-chapter").text().substringBefore(timeStamp)
-        date_upload = timeStamp.let { parseChapterDate(it) } ?: 0
+        name = element.select("div.d-flex").text()
+        date_upload = parseChapterDate(element.select("span.text-white-50").text()) ?: 0
     }
 
     fun parseChapterDate(date: String): Long {
@@ -134,7 +130,7 @@ class MangaYu : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
         var i = 0
-        document.select("div.row img.ch-img").forEach { element ->
+        document.select(".chapter-image img").forEach { element ->
             val url = element.attr("src")
             i++
             if (url.isNotEmpty()) {

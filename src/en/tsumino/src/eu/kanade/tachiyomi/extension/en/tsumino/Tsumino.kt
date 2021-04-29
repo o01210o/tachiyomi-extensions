@@ -49,7 +49,7 @@ class Tsumino : ParsedHttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val allManga = mutableListOf<SManga>()
-        val body = response.body()!!.string()
+        val body = response.body!!.string()
         val jsonManga = gson.fromJson<JsonObject>(body)["data"].asJsonArray
         for (i in 0 until jsonManga.size()) {
             val manga = SManga.create()
@@ -155,6 +155,7 @@ class Tsumino : ParsedHttpSource() {
         manga.status = SManga.COMPLETED
         manga.thumbnail_url = infoElement.select("img").attr("src")
         manga.description = getDesc(document)
+        manga.genre = document.select("#Tag a").joinToString { it.text() }
 
         return manga
     }

@@ -5,6 +5,7 @@ import com.github.salomonbrys.kotson.get
 import com.github.salomonbrys.kotson.string
 import com.google.gson.JsonArray
 import com.google.gson.JsonParser
+import eu.kanade.tachiyomi.lib.ratelimit.RateLimitInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -38,13 +39,12 @@ class CentralDeMangas : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    // Sometimes the site is very slow.
-    override val client: OkHttpClient =
-        network.client.newBuilder()
-            .connectTimeout(3, TimeUnit.MINUTES)
-            .readTimeout(3, TimeUnit.MINUTES)
-            .writeTimeout(3, TimeUnit.MINUTES)
-            .build()
+    override val client: OkHttpClient = network.client.newBuilder()
+        .connectTimeout(3, TimeUnit.MINUTES)
+        .readTimeout(3, TimeUnit.MINUTES)
+        .writeTimeout(3, TimeUnit.MINUTES)
+        .addInterceptor(RateLimitInterceptor(1, 1, TimeUnit.SECONDS))
+        .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", USER_AGENT)
@@ -192,17 +192,16 @@ class CentralDeMangas : ParsedHttpSource() {
 
     private fun getCoverUrl(slug: String): String = "$COVER_CDN/150x200/$slug.jpg"
 
-    private fun Response.asJsonArray(): JsonArray = JSON_PARSER.parse(body()!!.string()).array
+    private fun Response.asJsonArray(): JsonArray = JsonParser.parseString(body!!.string()).array
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
+        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.128 Safari/537.36"
         private const val COVER_CDN = "http://capas.centraldemangas.com.br"
 
         private const val SCRIPT_URL_BEGIN = "var urlSulfix = '"
         private const val SCRIPT_URL_END = "';"
         private const val SCRIPT_PAGES_BEGIN = "var pages = ["
         private const val SCRIPT_PAGES_END = ",];"
-
-        val JSON_PARSER by lazy { JsonParser() }
     }
 }

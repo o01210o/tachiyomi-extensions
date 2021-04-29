@@ -7,12 +7,11 @@ import android.graphics.Rect
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.exif.ExifSubIFDDirectory
 import okhttp3.Interceptor
-import okhttp3.MediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Response
 import okhttp3.ResponseBody
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.IOException
 import java.io.InputStream
 
 class VizImageInterceptor : Interceptor {
@@ -20,10 +19,10 @@ class VizImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
 
-        if (chain.request().url().queryParameter(SIGNATURE) == null)
+        if (chain.request().url.queryParameter(SIGNATURE) == null)
             return response
 
-        val image = decodeImage(response.body()!!.byteStream())
+        val image = decodeImage(response.body!!.byteStream())
         val body = ResponseBody.create(MEDIA_TYPE, image)
         return response.newBuilder()
             .body(body)
@@ -40,6 +39,7 @@ class VizImageInterceptor : Interceptor {
         val byteInputStreamForMetadata = ByteArrayInputStream(byteOutputStream.toByteArray())
 
         val imageData = getImageData(byteInputStreamForMetadata)
+            ?: return byteOutputStream.toByteArray()
 
         val input = BitmapFactory.decodeStream(byteInputStreamForImage)
         val width = input.width
@@ -127,7 +127,7 @@ class VizImageInterceptor : Interceptor {
         drawBitmap(from, srcRect, dstRect, null)
     }
 
-    private fun getImageData(inputStream: InputStream): ImageData {
+    private fun getImageData(inputStream: InputStream): ImageData? {
         val metadata = ImageMetadataReader.readMetadata(inputStream)
 
         val sizeDir = metadata.directories.firstOrNull {
@@ -141,7 +141,7 @@ class VizImageInterceptor : Interceptor {
             it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID)
         }
         val metaUniqueId = keyDir?.getString(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID)
-            ?: throw IOException(KEY_NOT_FOUND)
+            ?: return null
 
         return ImageData(metaWidth, metaHeight, metaUniqueId)
     }
@@ -155,7 +155,7 @@ class VizImageInterceptor : Interceptor {
 
     companion object {
         private const val SIGNATURE = "Signature"
-        private val MEDIA_TYPE = MediaType.parse("image/png")
+        private val MEDIA_TYPE = "image/png".toMediaTypeOrNull()
 
         private const val CELL_WIDTH_COUNT = 10
         private const val CELL_HEIGHT_COUNT = 15
@@ -166,7 +166,5 @@ class VizImageInterceptor : Interceptor {
 
         private const val COMMON_WIDTH = 800
         private const val COMMON_HEIGHT = 1200
-
-        private const val KEY_NOT_FOUND = "Decryption key not found in image metadata."
     }
 }
